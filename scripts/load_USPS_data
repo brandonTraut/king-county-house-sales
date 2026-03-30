@@ -1,0 +1,53 @@
+import pandas as pd
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    "postgresql://postgres:YOUR_PASSWORD@localhost:5432/king_county_db"
+)
+
+# Pull ZIPs from your master view
+house_zips = pd.read_sql("SELECT DISTINCT zipcode FROM v_master_dashboard", engine)
+
+house_zips["zipcode"] = pd.to_numeric(house_zips["zipcode"], errors="coerce")
+house_zips = house_zips.dropna()
+house_zips["zipcode"] = house_zips["zipcode"].astype(int)
+
+zip_set = set(house_zips["zipcode"])
+
+# Load USPS file
+usps = pd.read_excel("./data/raw/zip_codes.xls")
+
+# Check column names
+print(usps.columns)
+
+# Keep only needed columns
+usps = usps[["DELIVERY ZIPCODE", "PHYSICAL CITY"]].copy()
+
+# Ensure ZIP is numeric
+usps["DELIVERY ZIPCODE"] = pd.to_numeric(usps["DELIVERY ZIPCODE"], errors="coerce")
+usps = usps.dropna(subset=["DELIVERY ZIPCODE"])
+usps["DELIVERY ZIPCODE"] = usps["DELIVERY ZIPCODE"].astype(int)
+
+# Filter only your ZIPs
+zip_lookup = usps[usps["DELIVERY ZIPCODE"].isin(zip_set)].copy()
+
+# Debug before rename
+master_zips = set(house_zips["zipcode"])
+usps_zips = set(zip_lookup["DELIVERY ZIPCODE"])
+
+missing_zips = sorted(master_zips - usps_zips)
+
+print("Master ZIP count:", len(master_zips))
+print("Matched USPS ZIP count:", len(usps_zips))
+print("Missing ZIPs:", missing_zips)
+
+# Rename columns
+zip_lookup.columns = ["zipcode", "city"]
+
+# Drop duplicates
+zip_lookup = zip_lookup.drop_duplicates(subset=["zipcode"])
+
+# Load to Postgres
+zip_lookup.to_sql("zip_lookup", engine, if_exists="replace", index=False)
+
+print(f"Loaded {len(zip_lookup)} rows")
