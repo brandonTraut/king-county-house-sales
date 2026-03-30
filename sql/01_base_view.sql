@@ -9,8 +9,8 @@ SELECT id
 	,sqft_lot
 	,floors
 	,waterfront
-	,view AS view_rating
-	,condition AS property_condition
+	,view 
+	,condition
 	,grade
 	,sqft_above
 	,sqft_basement
